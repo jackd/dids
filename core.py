@@ -262,7 +262,7 @@ class WrappedDictDataset(DelegatingDataset):
     def __contains__(self, key):
         return key in self._base
 
-    def __iter__(self, key):
+    def __iter__(self):
         return iter(self._base)
 
     @property
