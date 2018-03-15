@@ -11,6 +11,19 @@ class DummyBar(object):
         pass
 
 
+class LengthedGenerator(object):
+    """Generator with an efficient, fixed length."""
+    def __init__(self, gen, gen_len):
+        self._gen = gen
+        self._len = gen_len
+
+    def __iter__(self):
+        return iter(self._gen)
+
+    def __len__(self):
+        return self._len
+
+
 class Dataset(object):
     """
     Abstract base class for dict-like interface with convenient wrapping fns.
@@ -124,8 +137,8 @@ class Dataset(object):
     def map(self, map_fn):
         return MappedDataset(self, map_fn)
 
-    def map_keys(self, key_fn):
-        return KeyMappedDataset(self, key_fn)
+    def map_keys(self, key_fn, inverse_fn=None):
+        return KeyMappedDataset(self, key_fn, inverse_fn)
 
     def save_dataset(self, dataset, overwrite=False, show_progress=True,
                      message=None):
@@ -495,12 +508,16 @@ class KeyMappedDataset(Dataset):
     print(key_mapped['ahoy hello'])  # 5
     ```
     """
-    def __init__(self, base_dataset, key_fn):
+    def __init__(self, base_dataset, key_fn, inverse_fn=None):
         self._base = base_dataset
         self._key_fn = key_fn
+        self._inverse_fn = inverse_fn
 
     def keys(self):
-        raise errors.unknown_keys_error(self)
+        if self._inverse_fn is None:
+            raise errors.unknown_keys_error(self)
+        else:
+            return (self._inverse_fn(k) for k in self._base.keys())
 
     def __len__(self):
         if self._keys is None:
@@ -567,3 +584,83 @@ class PrioritizedDataset(UnwritableDataset):
     def close(self):
         for d in self._datasets:
             d.close()
+
+
+class BiKeyDataset(Dataset):
+    """
+    Class for grouping multiple datasets into one with an additional key.
+
+    e.g.
+    ```
+    cars_ds = DictDataset({'c1': 'car1.png', 'c2': 'car2.png'}
+    tables_ds = DictDataset({'t1': 't1.png', 't2': 't2.png'})
+
+    obj_ds = BiKeyDataset({'car': cars_ds, 'table': tables_ds})
+    with obj_ds:
+        print(obj_ds[('car', 'c1')])  # 'car1.png'
+    ```
+    """
+    def __init__(self, **datasets):
+        self._datasets = datasets
+
+    def __getitem__(self, key):
+        k0, k1 = key
+        try:
+            dataset = self._datasets[k0]
+        except KeyError:
+            raise KeyError('No dataset at first key %s' % k0)
+        try:
+            return dataset[k1]
+        except KeyError:
+            raise KeyError('No entry in sub-dataset, %s' % str(key))
+
+    def __contains__(self, key):
+        k0, k1 = key
+        return k0 in self._datasets and k1 in self._datasets[k0]
+
+    def keys(self):
+        for k0, dataset in self._datasets.items():
+            for k1 in dataset:
+                yield (k0, k1)
+        # return itertools.chain(*(
+        #     (k0, k1) for k1 in dataset)
+        #     for k0, dataset in self._datasets.items())
+
+    def open(self):
+        for dataset in self._datasets.values():
+            dataset.open()
+
+    def close(self):
+        for dataset in self._datasets.values():
+            dataset.close()
+
+    @property
+    def is_open(self):
+        return all(d.is_open for d in self._datasets.values())
+
+    def values(self):
+        for dataset in self._datasets.values():
+            for v in dataset.values():
+                yield v
+        # return itertools.chain(
+        #     *(d.values() for d in self._datasets.values()))
+
+    def __len__(self):
+        return sum(len(d) for d in self._datasets.values())
+
+    def items(self):
+        for k0, dataset in self._datasets.items():
+            for k1, v in dataset.items():
+                yield (k0, k1), v
+
+    @property
+    def is_writable(self):
+        return all(d.is_writable for d in self._datasets.values())
+
+    def __setitem__(self, key, value):
+        k0, k1 = key
+        self._datasets[k0][k1] = value
+
+    def __delitem__(self, key):
+        k0, k1 = key
+        del self._datasets[k0][k1]
