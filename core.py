@@ -520,10 +520,7 @@ class KeyMappedDataset(Dataset):
             return (self._inverse_fn(k) for k in self._base.keys())
 
     def __len__(self):
-        if self._keys is None:
-            return len(self._base)
-        else:
-            return len(self._keys)
+        return len(self._base)
 
     def __getitem__(self, key):
         mapped_key = self._key_fn(key)
