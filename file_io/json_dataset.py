@@ -14,7 +14,7 @@ class JsonDataset(core.WrappedDictDataset):
     def is_open(self):
         return self._base is not None
 
-    def open(self):
+    def _open_resource(self):
         if self._mode == 'r' and not os.path.isfile(self._path):
             raise IOError(
                 'Cannot load json data: file does not exist at %s self._path')
@@ -28,7 +28,7 @@ class JsonDataset(core.WrappedDictDataset):
     def is_writable(self):
         return self._mode in ('a', 'w') and self.is_open
 
-    def close(self):
+    def _close_resource(self):
         if self.is_writable:
             folder = os.path.dirname(self._path)
             if not os.path.isdir(folder):

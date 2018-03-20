@@ -1,5 +1,5 @@
 import os
-from dids.json_dataset import JsonDataset
+from dids.file_io.json_dataset import JsonDataset
 
 path = os.path.join(
     os.path.realpath(os.path.dirname(__file__)), 'data.json')

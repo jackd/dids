@@ -19,7 +19,10 @@ class Hdf5Dataset(core.WrappedDictDataset):
     def is_open(self):
         return self._base is not None
 
-    def open(self):
+    def is_writable(self):
+        return self._mode in ('a', 'w') and self.is_open
+
+    def _open_resource(self):
         if self.is_open:
             raise IOError('Hdf5Dataset already open')
         if self._mode == 'r':
@@ -31,10 +34,7 @@ class Hdf5Dataset(core.WrappedDictDataset):
                 os.makedirs(folder)
         self._base = h5py.File(self._path, self._mode)
 
-    def is_writable(self):
-        return self._mode in ('a', 'w') and self.is_open
-
-    def close(self):
+    def _close_resource(self):
         if self.is_open:
             self._base.close()
             self._base = None

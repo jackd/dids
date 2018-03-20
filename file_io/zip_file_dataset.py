@@ -8,12 +8,12 @@ class ZipFileDataset(core.Dataset):
         self._path = path
         self._mode = mode
 
-    def open(self):
+    def _open_resource(self):
         if self._file is None:
             self._file = zipfile.ZipFile(self._path, self._mode)
         self._keys = None
 
-    def close(self):
+    def _close_resource(self):
         if self._file is None:
             return
         self._file.close()

@@ -43,13 +43,13 @@ class AutoSavingDataset(core.Dataset):
             self.src, overwrite=overwrite, show_progress=show_progress,
             message=message)
 
-    def open(self):
-        self.src.open()
-        self.dst.open()
+    def _open_resource(self):
+        self.src.open_connection(self)
+        self.dst.open_connection(self)
 
-    def close(self):
-        self.dst.close()
-        self.src.close()
+    def _close_resource(self):
+        self.dst.close_connection(self)
+        self.src.close_connection(self)
 
     def subset(self, keys, check_present=True):
         src = self.src.subset(keys, check_present)

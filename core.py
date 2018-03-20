@@ -36,9 +36,17 @@ class Dataset(object):
         do_stuff_with(dataset)
     ```
 
-    Default `__enter__`/`__exit__` implementations do nothing, but should be
-    overriden if accessing files.
+    Datasets can manage resources that require opening/closing by implementing
+    the `_open_resource` and `_close_resource` methods respectively. These will
+    be called such that the resource is ready whenever the dataset, or any
+    derived datasets are open.
+
+    Objects that depend on the data should `open_connection` and
+    `close_connection` with this dataset as needed.
     """
+
+    def __init__(self):
+        self._clients = set()
 
     @property
     def is_open(self):
@@ -100,11 +108,35 @@ class Dataset(object):
     def __exit__(self, *args, **kwargs):
         self.close()
 
-    def open(self):
+    def _open_resource(self):
         pass
 
-    def close(self):
+    def _close_resource(self):
         pass
+
+    def open_connection(self, client):
+        if not hasattr(self, '_clients'):
+            self._clients = set()
+        clients = self._clients
+        if len(clients) == 0:
+            self._open_resource()
+        clients.add(client)
+
+    def close_connection(self, client):
+        if not hasattr(self, '_clients'):
+            self._clients = set()
+        clients = self._clients
+        if client not in self._clients:
+            raise ValueError('Cannot close client connection: not open.')
+        clients.remove(client)
+        if len(clients) == 0:
+            self._close_resource()
+
+    def open(self):
+        self.open_connection(self)
+
+    def close(self):
+        self.close_connection(self)
 
     def get(self, key, default_value):
         try:
@@ -254,13 +286,13 @@ class DelegatingDataset(Dataset):
     def __getitem__(self, key):
         return self._base[key]
 
-    def open(self):
-        if hasattr(self._base, 'open'):
-            self._base.open()
+    def _open_resource(self):
+        if hasattr(self._base, 'open_connection'):
+            self._base.open_connection(self)
 
-    def close(self):
-        if hasattr(self._base, 'close'):
-            self._base.close()
+    def _close_resource(self):
+        if hasattr(self._base, 'close_connection'):
+            self._base.close_connection(self)
 
     def __setitem__(self, key, value):
         self._base[key] = value
@@ -352,13 +384,13 @@ class CompoundDataset(Dataset):
             raise errors.ClosedDatasetError(
                 'Cannot check membership for closed dataset')
 
-    def open(self):
+    def _open_resource(self):
         for v in self.datasets:
-            v.open()
+            v.open_connection(self)
 
-    def close(self):
+    def _close_resource(self):
         for v in self.datasets:
-            v.close()
+            v.close_connection(self)
 
     def __delitem__(self, key):
         for dataset in self.datasets:
@@ -473,8 +505,8 @@ class DataSubset(DelegatingDataset):
         else:
             raise errors.invalid_key_error(self, key)
 
-    def open(self):
-        super(DataSubset, self).open()
+    def _open_resource(self):
+        super(DataSubset, self)._open_resource()
         self._check_keys()
 
 
@@ -532,11 +564,11 @@ class KeyMappedDataset(Dataset):
     def __contains__(self, key):
         return self._key_fn(key) in self._base
 
-    def open(self):
-        self._base.open()
+    def _open_resource(self):
+        self._base.open_connection(self)
 
-    def close(self):
-        self._base.close()
+    def _close_resource(self):
+        self._base.close_connection(self)
 
     def __delitem__(self, key):
         del self._base[self._key_fn(key)]
@@ -574,13 +606,13 @@ class PrioritizedDataset(UnwritableDataset):
     def is_open(self):
         return all(d.is_open for d in self._datasets)
 
-    def open(self):
+    def _open_resource(self):
         for d in self._datasets:
-            d.open()
+            d.open_connection(self)
 
-    def close(self):
+    def _close_resource(self):
         for d in self._datasets:
-            d.close()
+            d.close_connection(self)
 
 
 class BiKeyDataset(Dataset):
@@ -623,13 +655,13 @@ class BiKeyDataset(Dataset):
         #     (k0, k1) for k1 in dataset)
         #     for k0, dataset in self._datasets.items())
 
-    def open(self):
+    def _open_resource(self):
         for dataset in self._datasets.values():
-            dataset.open()
+            dataset.open_connection(self)
 
-    def close(self):
+    def _close_resource(self):
         for dataset in self._datasets.values():
-            dataset.close()
+            dataset.close_connection(self)
 
     @property
     def is_open(self):
