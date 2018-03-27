@@ -549,7 +549,8 @@ class KeyMappedDataset(Dataset):
         if self._inverse_fn is None:
             raise errors.unknown_keys_error(self)
         else:
-            return (self._inverse_fn(k) for k in self._base.keys())
+            keys = (self._inverse_fn(k) for k in self._base.keys())
+            return (k for k in keys if k is not None)
 
     def __len__(self):
         return len(self._base)
