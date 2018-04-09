@@ -79,6 +79,71 @@ class Hdf5Dataset(core.WrappedDictDataset):
         del self._base[key]
 
 
+class NestedHdf5Dataset(Hdf5Dataset):
+    def __init__(self, path, mode='r'):
+        super(NestedHdf5Dataset, self).__init__(path, mode)
+
+    def __iter__(self):
+        return iter(self.keys())
+
+    def items(self):
+        for k0, v0 in self._base.items():
+            for k1, v1 in v0.items():
+                yield (k0, k1), v1
+
+    def values(self):
+        for v0 in self._base.values():
+            for v1 in v0.values():
+                yield v1
+
+    def keys(self):
+        for k0, v in self._base.items():
+            for k1 in v:
+                yield (k0, k1)
+
+    def __getitem__(self, key):
+        return self._base[os.path.join(*key)]
+
+    def __contains__(self, key):
+        k0, k1 = key
+        return k0 in self._base and k1 in self._base[k0]
+
+    def __setitem__(self, key, value):
+        self._assert_writable('Cannot set item in unwritable dataset')
+        self._save_item(self._base, os.path.join(*key), value)
+
+    def __delitem__(self, key):
+        self._assert_writable('Cannot delete item in unwritable dataset')
+        del self._base[os.path.join(*key)]
+
+
+class Hdf5ChildDataset(Hdf5Dataset):
+    def __init__(self, parent, subpath):
+        self._parent = parent
+        self._subpath = subpath
+        self._base = None
+
+    @property
+    def path(self):
+        return self._parent.path
+
+    @property
+    def subpath(self):
+        return self._subpath
+
+    def is_writable(self):
+        return self._parent.is_writable()
+
+    def _open_resource(self):
+        if self.is_open:
+            raise IOError('Hdf5Dataset already open')
+        self._base = self._parent[self._subpath]
+
+    def _close_resource(self):
+        if self.is_open:
+            self._base = None
+
+
 class Hdf5AutoSavingManager(auto_save.AutoSavingManager):
     def __init__(self, path, saving_message=None):
         self._path = path

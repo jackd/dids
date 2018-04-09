@@ -166,6 +166,9 @@ class Dataset(object):
     def subset(self, keys, check_present=True):
         return DataSubset(self, keys, check_present=check_present)
 
+    def filter_keys(self, key_filter_fn):
+        return KeyFilteredDataSubset(self, key_filter_fn)
+
     def map(self, map_fn):
         return MappedDataset(self, map_fn)
 
@@ -456,6 +459,29 @@ class MappedDataset(DelegatingDataset):
         return False
 
 
+class KeyFilteredDataSubset(DelegatingDataset):
+    def __init__(self, base_dataset, filter_fn):
+        self._filter_fn = filter_fn
+        super(KeyFilteredDataSubset, self).__init__(base_dataset)
+
+    def keys(self):
+        self._assert_open('Cannot get keys for closed dataset')
+        return (
+            k for k in super(KeyFilteredDataSubset, self).keys()
+            if self._filter_fn(k))
+
+    def __getitem__(self, key):
+        self._assert_open('Cannot get item from closed dataset')
+        if not self._filter_fn(key):
+            raise KeyError('key %s not valid: fails filter' % key)
+        return super(KeyFilteredDataSubset, self).__getitem__(key)
+
+    def filter_keys(self, key_filter_fn):
+        def combined_fn(key):
+            return self._filter_fn(key) and key_filter_fn(key)
+        return KeyFilteredDataSubset(self._base, combined_fn)
+
+
 class DataSubset(DelegatingDataset):
     """Dataset with keys constrained to a given subset."""
     def __init__(self, base_dataset, keys, check_present=True):
@@ -630,8 +656,8 @@ class BiKeyDataset(Dataset):
         print(obj_ds[('car', 'c1')])  # 'car1.png'
     ```
     """
-    def __init__(self, **datasets):
-        self._datasets = datasets
+    def __init__(self, dataset_dict):
+        self._datasets = dataset_dict
 
     def __getitem__(self, key):
         k0, k1 = key
@@ -657,12 +683,18 @@ class BiKeyDataset(Dataset):
         #     for k0, dataset in self._datasets.items())
 
     def _open_resource(self):
+        if hasattr(self._datasets, 'open_connection'):
+            self._datasets.open_connection(self)
         for dataset in self._datasets.values():
-            dataset.open_connection(self)
+            if hasattr(dataset, 'open_connection'):
+                dataset.open_connection(self)
 
     def _close_resource(self):
+        if hasattr(self._datasets, 'close_connection'):
+            self._datasets.close_connection(self)
         for dataset in self._datasets.values():
-            dataset.close_connection(self)
+            if hasattr(dataset, 'close_connection'):
+                dataset.close_connection(self)
 
     @property
     def is_open(self):
