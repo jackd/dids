@@ -254,6 +254,27 @@ class UnwritableDataset(Dataset):
             'Cannot pop item from unwritable dataset')
 
 
+class WrappedTupleDataset(UnwritableDataset):
+    """Tuple/list wrapper, with keys being integers."""
+    def __init__(self, values):
+        self._values = values
+
+    def is_open(self):
+        return True
+
+    def __getitem__(self, key):
+        return self._values[key]
+
+    def __contains__(self, key):
+        return isinstance(key, int) and 0 <= key < len(self._values)
+
+    def __len__(self):
+        return len(self._values)
+
+    def keys(self):
+        return range(len(self))
+
+
 class DelegatingDataset(Dataset):
     """
     Minimal wrapping implementation that wraps another dict-like object.
