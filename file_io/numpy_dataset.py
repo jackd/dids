@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from file_dataset import FileDataset
+from .file_dataset import FileDataset
 
 
 class NumpyDataset(FileDataset):

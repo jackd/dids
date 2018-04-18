@@ -56,13 +56,14 @@ class Hdf5Dataset(core.WrappedDictDataset):
             for k, v in value.items():
                 group.attrs[k] = v
         elif hasattr(value, 'items'):
+            subgroup = None
             try:
                 subgroup = group.create_group(key)
                 for k, v in value.items():
                     self._save_item(subgroup, k, v)
                 return subgroup
             except Exception:
-                if key in subgroup:
+                if subgroup is not None and key in subgroup:
                     del subgroup[key]
                 raise
         else:

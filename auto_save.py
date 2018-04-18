@@ -1,5 +1,5 @@
-import core
-import errors
+import dids.core as core
+import dids.errors as errors
 
 
 class AutoSavingDataset(core.Dataset):

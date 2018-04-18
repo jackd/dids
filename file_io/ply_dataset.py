@@ -1,6 +1,6 @@
 import os
 from plyfile import PlyData
-from file_dataset import FileDataset
+from .file_dataset import FileDataset
 
 
 class PlyDataset(FileDataset):

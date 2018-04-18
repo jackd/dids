@@ -1,5 +1,5 @@
-import errors
-import sets
+import dids.errors as errors
+import dids.sets as sets
 from progress.bar import IncrementalBar
 
 

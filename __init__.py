@@ -1,4 +1,4 @@
-from core import Dataset, UnwritableDataset
+from .core import Dataset, UnwritableDataset
 
 __all__ = [
     Dataset,
