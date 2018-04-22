@@ -254,7 +254,7 @@ class UnwritableDataset(Dataset):
             'Cannot pop item from unwritable dataset')
 
 
-class WrappedTupleDataset(UnwritableDataset):
+class WrappedListDataset(UnwritableDataset):
     """Tuple/list wrapper, with keys being integers."""
     def __init__(self, values):
         self._values = values
@@ -264,6 +264,9 @@ class WrappedTupleDataset(UnwritableDataset):
 
     def __getitem__(self, key):
         return self._values[key]
+
+    def __setitem__(self, key, value):
+        self._values[key] = value
 
     def __contains__(self, key):
         return isinstance(key, int) and 0 <= key < len(self._values)

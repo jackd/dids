@@ -124,6 +124,9 @@ class Hdf5ChildDataset(Hdf5Dataset):
         self._subpath = subpath
         self._base = None
 
+    def _create_self(self):
+        self._parent._base.create_group(self._subpath)
+
     @property
     def path(self):
         return self._parent.path
@@ -138,11 +141,35 @@ class Hdf5ChildDataset(Hdf5Dataset):
     def _open_resource(self):
         if self.is_open:
             raise IOError('Hdf5Dataset already open')
+        self._parent.open_connection(self)
+        if self._subpath not in self._parent:
+            self._create_self()
         self._base = self._parent[self._subpath]
 
     def _close_resource(self):
         if self.is_open:
             self._base = None
+
+
+class Hdf5ArrayDataset(Hdf5ChildDataset):
+    def __init__(self, parent, subpath, shape=None, dtype=None):
+        self._shape = shape
+        self._dtype = dtype
+        super(Hdf5ArrayDataset, self).__init__(parent, subpath)
+
+    def _create_self(self):
+        self._parent._base.create_dataset(
+            self._subpath, shape=self._shape, dtype=self._dtype)
+
+    def keys(self):
+        return range(len(self._base))
+
+    def __delitem__(self, key):
+        raise NotImplementedError('Cannot delete item from array dataset')
+
+    def __setitem__(self, key, value):
+        self._assert_writable('Cannot set item in unwritable dataset')
+        self._base[key] = value
 
 
 class Hdf5AutoSavingManager(auto_save.AutoSavingManager):
