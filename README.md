@@ -1,4 +1,4 @@
-# Diction Interface to DataSets
+# Dictionary Interface to DataSets
 Small `python` library for managing different sources in a dataset and interfacing with them as dictionaries.
 
 Manages mapping, combining and saving/loading to file.
