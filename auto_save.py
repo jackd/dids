@@ -77,6 +77,6 @@ class AutoSavingManager(object):
         with self.get_auto_saving_dataset('a') as ds:
             ds.save_all(overwrite=overwrite, message=self.saving_message)
 
-    def get_saved_dataset(self):
+    def get_saved_dataset(self, mode='r'):
         self.save_all()
-        return self.get_saving_dataset(mode='r')
+        return self.get_saving_dataset(mode=mode)
