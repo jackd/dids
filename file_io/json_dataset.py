@@ -20,7 +20,10 @@ class JsonDataset(core.WrappedDictDataset):
                 'Cannot load json data: file does not exist at %s self._path')
         if self._mode in ('r', 'a') and os.path.isfile(self._path):
             with open(self._path, 'r') as fp:
-                self._base = json.load(fp)
+                try:
+                    self._base = json.load(fp)
+                except ValueError:
+                    raise ValueError('Invalid json data at %s' % self._path)
         else:
             self._base = {}
 
