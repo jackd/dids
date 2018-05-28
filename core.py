@@ -521,7 +521,7 @@ class DataSubset(DelegatingDataset):
         if self._check_present:
             for key in self._keys:
                 if key not in self._base:
-                    raise KeyError('key %s not present in base' % key)
+                    raise KeyError('key %s not present in base' % str(key))
 
     def subset(self, keys, check_present=True):
         if check_present:
@@ -750,3 +750,34 @@ class BiKeyDataset(Dataset):
     def __delitem__(self, key):
         k0, k1 = key
         del self._datasets[k0][k1]
+
+
+
+def _nested_items(group, depth):
+    if depth == 1:
+        for key, value in group.items():
+            yield (key,), value
+    else:
+        for key, value in group.items():
+            for keys, value in _nested_items(value, depth-1):
+                yield (key,) + keys, value
+
+
+def _nested_keys(group, depth):
+    if depth == 1:
+        for key in group.keys():
+            yield (key,)
+    else:
+        for key, value in group.items():
+            for keys in _nested_keys(value, depth-1):
+                yield (key,) + keys
+
+
+def _nested_values(group, depth):
+    if depth == 1:
+        for value in group.values():
+            yield value
+    else:
+        for value in group.values():
+            for subval in _nested_values(value, depth-1):
+                yield subval

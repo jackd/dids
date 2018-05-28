@@ -2,6 +2,7 @@ import os
 import json
 import dids.core as core
 import dids.auto_save as auto_save
+from dids.core import _nested_items, _nested_keys, _nested_values
 
 
 class JsonDataset(core.WrappedDictDataset):
@@ -50,11 +51,15 @@ class JsonDataset(core.WrappedDictDataset):
 
 
 class NestedJsonDataset(JsonDataset):
+    def __init__(self, path, mode='r', nested_depth=2):
+        super(NestedJsonDataset, self).__init__(path, mode)
+        self._nested_depth = nested_depth
+
     def __setitem__(self, key, value):
         self._assert_writable('Cannot set value of unwritable dataset')
         base = self._base
         for k in key[:-1]:
-            base = self._base.setdefault(k, {})
+            base = base.setdefault(k, {})
         base[key[-1]] = value
 
     def __delitem__(self, key):
@@ -64,14 +69,23 @@ class NestedJsonDataset(JsonDataset):
             base = self._base[k]
         del base[key[-1]]
 
+    def values(self):
+        return _nested_values(self._base, self._nested_depth)
+
+    def items(self):
+        return _nested_items(self._base, self._nested_depth)
+
+    def keys(self):
+        return _nested_keys(self._base, self._nested_depth)
+
 
 class JsonAutoSavingManager(auto_save.AutoSavingManager):
-    def __init__(self, path, saving_message=None, nested=False):
+    def __init__(self, path, saving_message=None, nested_depth=None):
         self._path = path
         if saving_message is None:
             saving_message = 'Creating data for %s' % path
         self._saving_message = saving_message
-        self._nested
+        self._nested_depth = nested_depth
 
     @property
     def saving_message(self):
@@ -82,7 +96,8 @@ class JsonAutoSavingManager(auto_save.AutoSavingManager):
         return self._path
 
     def get_saving_dataset(self, mode='a'):
-        if hasattr(self, '_nested') and self._nested:
-            return NestedJsonDataset(self.path, mode)
+        if hasattr(self, '_nested_depth') and self._nested_depth is not None:
+            return NestedJsonDataset(
+                self.path, mode, nested_depth=self._nested_depth)
         else:
             return JsonDataset(self.path, mode)
