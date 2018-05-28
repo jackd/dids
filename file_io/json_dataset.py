@@ -49,12 +49,29 @@ class JsonDataset(core.WrappedDictDataset):
         del self._base[key]
 
 
+class NestedJsonDataset(JsonDataset):
+    def __setitem__(self, key, value):
+        self._assert_writable('Cannot set value of unwritable dataset')
+        base = self._base
+        for k in key[:-1]:
+            base = self._base.setdefault(k, {})
+        base[key[-1]] = value
+
+    def __delitem__(self, key):
+        self._assert_writable('Cannot delete item from unwritable dataset')
+        base = self._base
+        for k in key[:-1]:
+            base = self._base[k]
+        del base[key[-1]]
+
+
 class JsonAutoSavingManager(auto_save.AutoSavingManager):
-    def __init__(self, path, saving_message=None):
+    def __init__(self, path, saving_message=None, nested=False):
         self._path = path
         if saving_message is None:
             saving_message = 'Creating data for %s' % path
         self._saving_message = saving_message
+        self._nested
 
     @property
     def saving_message(self):
@@ -65,4 +82,7 @@ class JsonAutoSavingManager(auto_save.AutoSavingManager):
         return self._path
 
     def get_saving_dataset(self, mode='a'):
-        return JsonDataset(self.path, mode)
+        if hasattr(self, '_nested') and self._nested:
+            return NestedJsonDataset(self.path, mode)
+        else:
+            return JsonDataset(self.path, mode)
