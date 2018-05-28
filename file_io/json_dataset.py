@@ -55,6 +55,15 @@ class NestedJsonDataset(JsonDataset):
         super(NestedJsonDataset, self).__init__(path, mode)
         self._nested_depth = nested_depth
 
+    def __iter__(self):
+        return iter(self.keys())
+
+    def __getitem__(self, key):
+        base = self._base
+        for k in key:
+            base = base[k]
+        return base
+
     def __setitem__(self, key, value):
         self._assert_writable('Cannot set value of unwritable dataset')
         base = self._base

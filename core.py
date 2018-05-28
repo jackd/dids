@@ -752,7 +752,6 @@ class BiKeyDataset(Dataset):
         del self._datasets[k0][k1]
 
 
-
 def _nested_items(group, depth):
     if depth == 1:
         for key, value in group.items():
