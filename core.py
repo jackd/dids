@@ -1,14 +1,17 @@
 import dids.errors as errors
 import dids.sets as sets
-from progress.bar import IncrementalBar
 
 
-class DummyBar(object):
-    def next(self):
-        pass
-
-    def finish():
-        pass
+def _get_progress(keys, force_bar=True):
+    from progress.bar import IncrementalBar
+    from progress.spinner import Spinner
+    if force_bar:
+        max_val = len(keys) if hasattr(keys, '__len__') else \
+            len(tuple(keys))
+        bar = IncrementalBar(max=max_val)
+    else:
+        bar = Spinner()
+    return bar
 
 
 class LengthedGenerator(object):
@@ -60,6 +63,13 @@ class Dataset(object):
     def __getitem__(self, key):
         self._assert_open('Cannot get item from closed dataset')
         raise NotImplementedError('Abstract method')
+
+    def setdefault(self, key, value):
+        if key in self:
+            return self[key]
+        else:
+            self[key] = value
+            return value
 
     @property
     def is_writable(self):
@@ -181,12 +191,12 @@ class Dataset(object):
             raise IOError('Cannot save to non-open dataset.')
         keys = dataset.keys()
         if not overwrite:
-            keys = [k for k in keys if k not in self]
+            keys = tuple(k for k in keys if k not in self)
         if len(keys) == 0:
             return
         if message is not None:
             print(message)
-        bar = IncrementalBar(max=len(keys)) if show_progress else DummyBar()
+        bar = _get_progress(keys, show_progress)
         for key in keys:
             bar.next()
             if key in self:
@@ -198,13 +208,7 @@ class Dataset(object):
     def save_items(self, items, overwrite=False, show_progress=True):
         if not self.is_open:
             raise IOError('Cannot save to non-open dataset.')
-        if show_progress:
-            if hasattr(items, '__len__'):
-                bar = IncrementalBar(max=len(items))
-            else:
-                bar = IncrementalBar()
-        else:
-            bar = DummyBar()
+        bar = _get_progress(items, show_progress)
         for key, value in items:
             bar.next()
             if key in self:
@@ -752,6 +756,14 @@ class BiKeyDataset(Dataset):
         del self._datasets[k0][k1]
 
 
+def _nested_contains(key, group, depth):
+    for k in key[:-1]:
+        if k not in group:
+            return False
+        group = group[k]
+    return key[-1] in group
+
+
 def _nested_items(group, depth):
     if depth == 1:
         for key, value in group.items():
@@ -780,3 +792,63 @@ def _nested_values(group, depth):
         for value in group.values():
             for subval in _nested_values(value, depth-1):
                 yield subval
+
+
+def _nested_length(group, depth):
+    if depth == 1:
+        return len(group)
+    else:
+        return sum(_nested_length(v, depth-1) for v in group.values())
+
+
+class NestedDataset(DelegatingDataset):
+    def __init__(self, base, depth):
+        if base is None:
+            raise ValueError('base cannot be None')
+        if depth is None or depth < 1:
+            raise ValueError('base must be a positive integer')
+        self._depth = depth
+        super(NestedDataset, self).__init__(base)
+
+    def keys(self):
+        return _nested_keys(self._base, self._depth)
+
+    def values(self):
+        return _nested_values(self._base, self._depth)
+
+    def items(self):
+        return _nested_items(self._base, self._depth)
+
+    def __len__(self):
+        return _nested_length(self._base, self._depth)
+
+    def __contains__(self, key):
+        return _nested_contains(key, self._base, self._depth)
+
+    def __getitem__(self, key):
+        self._assert_valid_key(key)
+        base = self._base
+        for k in key:
+            base = base[k]
+        return base
+
+    def __setitem__(self, key, value):
+        self._assert_writable('Cannot set value of unwritable dataset')
+        self._assert_valid_key(key)
+        base = self._base
+        for k in key[:-1]:
+            base = base.setdefault(k, {})
+        base[key[-1]] = value
+
+    def __delitem__(self, key):
+        self._assert_writable('Cannot delete item from unwritable dataset')
+        self._assert_valid_key(key)
+        base = self._base
+        for k in key[:-1]:
+            base = self._base[k]
+        del base[key[-1]]
+
+    def _assert_valid_key(self, key):
+        if not (isinstance(key, tuple) and len(key) == self._depth):
+            raise KeyError('key must be tuple of length %d, got "%s"'
+                           % (self._depth, key))

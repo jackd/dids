@@ -3,7 +3,7 @@ import numpy as np
 import h5py
 import dids.core as core
 import dids.auto_save as auto_save
-from dids.core import _nested_items, _nested_keys, _nested_values
+from dids.core import NestedDataset
 
 
 class Hdf5Dataset(core.WrappedDictDataset):
@@ -81,45 +81,11 @@ class Hdf5Dataset(core.WrappedDictDataset):
         del self._base[key]
 
 
-class NestedHdf5Dataset(Hdf5Dataset):
-    def __init__(self, path, mode='r', depth=2):
-        super(NestedHdf5Dataset, self).__init__(path, mode)
-        self._depth = depth
+def nested_hdf5_dataset(path, depth, mode='r'):
+    return NestedDataset(Hdf5Dataset(path, mode), depth)
 
-    def __iter__(self):
-        return iter(self.keys())
 
-    def items(self):
-        return _nested_items(self._base, self._depth)
-
-    def values(self):
-        return _nested_values(self._base, self._depth)
-
-    def keys(self):
-        return _nested_keys(self._base, self._depth)
-
-    def _assert_valid_key(self, key):
-        if not (isinstance(key, tuple) and len(key) == self._depth):
-            raise KeyError('key must be tuple of length %d, got "%s"'
-                           % (self._depth, key))
-
-    def __getitem__(self, key):
-        self._assert_valid_key(key)
-        return self._base[os.path.join(*key)]
-
-    def __contains__(self, key):
-        self._assert_valid_key(key)
-        return os.path.join(*key) in self._base
-
-    def __setitem__(self, key, value):
-        self._assert_writable('Cannot set item in unwritable dataset')
-        self._assert_valid_key(key)
-        self._save_item(self._base, os.path.join(*key), value)
-
-    def __delitem__(self, key):
-        self._assert_writable('Cannot delete item in unwritable dataset')
-        self._assert_valid_key(key)
-        del self._base[os.path.join(*key)]
+NestedHdf5Dataset = nested_hdf5_dataset
 
 
 class Hdf5ChildDataset(Hdf5Dataset):
@@ -194,6 +160,6 @@ class Hdf5AutoSavingManager(auto_save.AutoSavingManager):
 
     def get_saving_dataset(self, mode='a'):
         if hasattr(self, '_nested_depth') and self._nested_depth:
-            return NestedHdf5Dataset(self.path, mode, depth=self._nested_depth)
+            return nested_hdf5_dataset(self.path, self._nested_depth, mode)
         else:
             return Hdf5Dataset(self.path, mode)

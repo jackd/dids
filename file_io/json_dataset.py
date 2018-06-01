@@ -2,7 +2,7 @@ import os
 import json
 import dids.core as core
 import dids.auto_save as auto_save
-from dids.core import _nested_items, _nested_keys, _nested_values
+from dids.core import NestedDataset
 
 
 class JsonDataset(core.WrappedDictDataset):
@@ -18,7 +18,8 @@ class JsonDataset(core.WrappedDictDataset):
     def _open_resource(self):
         if self._mode == 'r' and not os.path.isfile(self._path):
             raise IOError(
-                'Cannot load json data: file does not exist at %s self._path')
+                'Cannot load json data: file does not exist at %s self._path'
+                % self._path)
         if self._mode in ('r', 'a') and os.path.isfile(self._path):
             with open(self._path, 'r') as fp:
                 try:
@@ -50,42 +51,11 @@ class JsonDataset(core.WrappedDictDataset):
         del self._base[key]
 
 
-class NestedJsonDataset(JsonDataset):
-    def __init__(self, path, mode='r', nested_depth=2):
-        super(NestedJsonDataset, self).__init__(path, mode)
-        self._nested_depth = nested_depth
+def nested_json_dataset(path, depth, mode='r'):
+    return NestedDataset(JsonDataset(path, mode), depth)
 
-    def __iter__(self):
-        return iter(self.keys())
 
-    def __getitem__(self, key):
-        base = self._base
-        for k in key:
-            base = base[k]
-        return base
-
-    def __setitem__(self, key, value):
-        self._assert_writable('Cannot set value of unwritable dataset')
-        base = self._base
-        for k in key[:-1]:
-            base = base.setdefault(k, {})
-        base[key[-1]] = value
-
-    def __delitem__(self, key):
-        self._assert_writable('Cannot delete item from unwritable dataset')
-        base = self._base
-        for k in key[:-1]:
-            base = self._base[k]
-        del base[key[-1]]
-
-    def values(self):
-        return _nested_values(self._base, self._nested_depth)
-
-    def items(self):
-        return _nested_items(self._base, self._nested_depth)
-
-    def keys(self):
-        return _nested_keys(self._base, self._nested_depth)
+NestedJsonDataset = nested_json_dataset
 
 
 class JsonAutoSavingManager(auto_save.AutoSavingManager):
@@ -106,7 +76,7 @@ class JsonAutoSavingManager(auto_save.AutoSavingManager):
 
     def get_saving_dataset(self, mode='a'):
         if hasattr(self, '_nested_depth') and self._nested_depth is not None:
-            return NestedJsonDataset(
-                self.path, mode, nested_depth=self._nested_depth)
+            return nested_json_dataset(
+                self.path, self._nested_depth, mode)
         else:
             return JsonDataset(self.path, mode)
