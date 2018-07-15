@@ -646,6 +646,7 @@ class KeyMappedDataset(Dataset):
 class PrioritizedDataset(UnwritableDataset):
     def __init__(self, *datasets):
         self._datasets = datasets
+        self._keys = None
 
     def __getitem__(self, key):
         for d in self._datasets:
@@ -654,11 +655,17 @@ class PrioritizedDataset(UnwritableDataset):
         raise errors.invalid_key_error(self, key)
 
     def __contains__(self, key):
-        return any(key in d for d in self._datasets)
+        if self._keys is not None:
+            return key in self._keys
+        else:
+            return any(key in d for d in self._datasets)
 
     def keys(self):
-        ds = self._datasets
-        return ds[0].keys().union(d.keys() for d in ds)
+        if self._keys is None:
+            ds = self._datasets
+            self._keys = frozenset(
+                ds[0].keys().union(*(d.keys() for d in ds[1:])))
+        return self._keys
 
     @property
     def is_open(self):
@@ -671,6 +678,7 @@ class PrioritizedDataset(UnwritableDataset):
     def _close_resource(self):
         for d in self._datasets:
             d.close_connection(self)
+        self._keys = None
 
 
 class BiKeyDataset(Dataset):
