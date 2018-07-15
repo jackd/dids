@@ -236,8 +236,8 @@ class Dataset(object):
         return DelegatingDataset(dictish)
 
     @staticmethod
-    def from_function(key_fn):
-        return FunctionDataset(key_fn)
+    def from_function(key_fn, keys=None):
+        return FunctionDataset(key_fn, keys=keys)
 
 
 class UnwritableDataset(Dataset):
@@ -566,16 +566,19 @@ class DataSubset(DelegatingDataset):
 
 class FunctionDataset(UnwritableDataset):
     """Dataset which wraps a function."""
-    def __init__(self, key_fn):
+    def __init__(self, key_fn, keys=None):
         self._key_fn = key_fn
+        self._keys = sets.entire_set if keys is None else frozenset(keys)
 
     def keys(self):
-        return sets.entire_set
+        return self._keys
 
     def __contains__(self, key):
-        return True
+        return key in self._keys
 
     def __getitem__(self, key):
+        if key not in self._keys:
+            raise KeyError('Invalid key: %s' % key)
         return self._key_fn(key)
 
     @property
