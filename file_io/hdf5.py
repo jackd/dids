@@ -3,7 +3,32 @@ import numpy as np
 import h5py
 import dids.core as core
 import dids.auto_save as auto_save
-from dids.core import NestedDataset
+from dids.nest import NestedDataset
+
+
+def _save_item(group, key, value):
+    if isinstance(value, np.ndarray):
+        return group.create_dataset(key, data=value)
+    elif key == 'attrs':
+        if not hasattr(value, 'items'):
+            raise ValueError('attrs value must have `items` attr')
+        for k, v in value.items():
+            group.attrs[k] = v
+    elif hasattr(value, 'items'):
+        subgroup = None
+        try:
+            subgroup = group.create_group(key)
+            for k, v in value.items():
+                _save_item(subgroup, k, v)
+            return subgroup
+        except Exception:
+            if subgroup is not None and key in subgroup:
+                del subgroup[key]
+            raise
+    else:
+        raise TypeError(
+            'value must be numpy array or have `items` attr, got %s'
+            % str(value))
 
 
 class Hdf5Dataset(core.WrappedDictDataset):
@@ -11,6 +36,14 @@ class Hdf5Dataset(core.WrappedDictDataset):
         self._path = path
         self._mode = mode
         self._base = None
+
+    def __setitem__(self, key, value):
+        self._assert_writable('Cannot set item in unwritable dataset')
+        _save_item(self._base, key, value)
+
+    def __delitem__(self, key):
+        self._assert_writable('Cannot delete item in unwritable dataset')
+        del self._base[key]
 
     @property
     def path(self):
@@ -39,53 +72,6 @@ class Hdf5Dataset(core.WrappedDictDataset):
         if self.is_open:
             self._base.close()
             self._base = None
-
-    def _save_np(self, group, key, value, attrs=None):
-        assert(isinstance(value, np.ndarray))
-        dataset = group.create_dataset(key, data=value)
-        if attrs is not None:
-            for k, v in attrs.items():
-                dataset.attrs[k] = v
-        return dataset
-
-    def _save_item(self, group, key, value):
-        if isinstance(value, np.ndarray):
-            return group.create_dataset(key, data=value)
-        elif key == 'attrs':
-            if not hasattr(value, 'items'):
-                raise ValueError('attrs value must have `items` attr')
-            for k, v in value.items():
-                group.attrs[k] = v
-        elif hasattr(value, 'items'):
-            subgroup = None
-            try:
-                subgroup = group.create_group(key)
-                for k, v in value.items():
-                    self._save_item(subgroup, k, v)
-                return subgroup
-            except Exception:
-                if subgroup is not None and key in subgroup:
-                    del subgroup[key]
-                raise
-        else:
-            raise TypeError(
-                'value must be numpy array or have `items` attr, got %s'
-                % str(value))
-
-    def __setitem__(self, key, value):
-        self._assert_writable('Cannot set item in unwritable dataset')
-        self._save_item(self._base, key, value)
-
-    def __delitem__(self, key):
-        self._assert_writable('Cannot delete item in unwritable dataset')
-        del self._base[key]
-
-
-def nested_hdf5_dataset(path, depth, mode='r'):
-    return NestedDataset(Hdf5Dataset(path, mode), depth)
-
-
-NestedHdf5Dataset = nested_hdf5_dataset
 
 
 class Hdf5ChildDataset(Hdf5Dataset):
@@ -119,6 +105,77 @@ class Hdf5ChildDataset(Hdf5Dataset):
     def _close_resource(self):
         if self.is_open:
             self._base = None
+
+
+# def _nested_hdf5_child_dataset(parent, subpath, depth):
+#     print('--')
+#     print(parent, subpath)
+#     base = Hdf5ChildDataset(parent, subpath)
+#     if depth == 1:
+#         return base
+#     else:
+#         return BiKeyDataset(base).map_keys(
+#             lambda x: (x[0], x[1:]), lambda x: (x[0],) + x[1]).map(
+#             lambda x: _nested_hdf5_child_dataset(x._base, depth-1))
+#
+#
+# def nested_hdf5_dataset(depth, path, mode='r'):
+#     return NestedDataset(Hdf5Dataset(path, mode), depth)
+
+
+# def nested_hdf5_group_dataset(depth, group):
+#     base = Hdf5GroupDataset(group)
+#     if depth == 1:
+#         return base
+#
+#     def child_fn(child, depth):
+#         base = Hdf5GroupDataset(child)
+#         if depth == 1:
+#             base = Hdf5GroupDataset(base)
+#         else:
+#             return nested_hdf5_group_dataset(depth, group)
+#
+#     return NestedDataset(base, depth, child_fn)
+#
+#
+# def nested_hdf5_dataset(depth, path, mode='r'):
+#     base = Hdf5Dataset(path, mode)
+#     if depth == 1:
+#         return base
+
+    # def child_fn(child, depth):
+    #     base = Hdf5GroupDataset(child)
+    #     if depth == 1:
+    #         return base
+    #     else:
+    #         return nested_hdf5_group_dataset(base, depth)
+
+    # return NestedDataset(base, depth, nested_hdf5_group_dataset)
+
+
+# NestedHdf5Dataset = nested_hdf5_dataset
+
+class NestedHdf5Dataset(NestedDataset):
+    def __init__(self, depth, path, mode='r'):
+        base = Hdf5Dataset(path, mode=mode)
+        super(NestedHdf5Dataset, self).__init__(base, depth)
+
+    def __setitem__(self, key, value):
+        self._assert_writable('Cannot set value of unwritable dataset')
+        self._assert_valid_key(key)
+        base = self._base._base
+        for k in key[:-1]:
+            base = base.require_group(k)
+        _save_item(base, key[-1], value)
+
+
+# class NestedHdf5Dataset(Hdf5Dataset):
+#     def __init__(self, depth, path, mode='r'):
+#         self._depth = depth
+#         super(NestedHdf5Dataset, self).__init__(path, mode=mode)
+#
+#
+nested_hdf5_dataset = NestedHdf5Dataset
 
 
 class Hdf5ArrayDataset(Hdf5ChildDataset):
@@ -160,6 +217,6 @@ class Hdf5AutoSavingManager(auto_save.AutoSavingManager):
 
     def get_saving_dataset(self, mode='a'):
         if hasattr(self, '_nested_depth') and self._nested_depth:
-            return nested_hdf5_dataset(self.path, self._nested_depth, mode)
+            return nested_hdf5_dataset(self._nested_depth, self.path, mode)
         else:
             return Hdf5Dataset(self.path, mode)

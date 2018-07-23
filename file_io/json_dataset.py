@@ -2,7 +2,7 @@ import os
 import json
 import dids.core as core
 import dids.auto_save as auto_save
-from dids.core import NestedDataset
+from dids.nest import NestedDataset
 
 
 class JsonDataset(core.WrappedDictDataset):
@@ -38,8 +38,12 @@ class JsonDataset(core.WrappedDictDataset):
             folder = os.path.dirname(self._path)
             if not os.path.isdir(folder):
                 os.makedirs(folder)
-            with open(self._path, 'w') as fp:
-                json.dump(self._base, fp)
+            try:
+                with open(self._path, 'w') as fp:
+                    json.dump(self._base, fp)
+            except Exception:
+                os.remove(self._path)
+                raise
         self._base = None
 
     def __setitem__(self, key, value):
@@ -51,8 +55,14 @@ class JsonDataset(core.WrappedDictDataset):
         del self._base[key]
 
 
+def nested_wrapped_dataset(wrapped_dict, depth):
+    if depth == 1:
+        return wrapped_dict
+    return NestedDataset(wrapped_dict, depth)
+
+
 def nested_json_dataset(path, depth, mode='r'):
-    return NestedDataset(JsonDataset(path, mode), depth)
+    return nested_wrapped_dataset(JsonDataset(path, mode), depth)
 
 
 NestedJsonDataset = nested_json_dataset
