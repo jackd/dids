@@ -31,4 +31,4 @@ def mode_error(mode):
 
 
 def invalid_key_error(dataset, key):
-    return KeyError('key %s not a valid key' % key)
+    return KeyError('key %s not a valid key' % str(key))
