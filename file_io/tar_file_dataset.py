@@ -8,6 +8,10 @@ class TarFileDataset(core.Dataset):
         self._path = path
         self._mode = mode
 
+    @property
+    def path(self):
+        return self._path
+
     def _open_resource(self):
         if self._file is None:
             self._file = tarfile.TarFile(self._path, self._mode)

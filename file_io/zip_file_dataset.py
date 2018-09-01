@@ -8,6 +8,10 @@ class ZipFileDataset(core.Dataset):
         self._path = path
         self._mode = mode
 
+    @property
+    def path(self):
+        return self._path
+
     def _open_resource(self):
         if self._file is None:
             self._file = zipfile.ZipFile(self._path, self._mode)
@@ -28,10 +32,13 @@ class ZipFileDataset(core.Dataset):
     def __getitem__(self, key):
         return self._file.open(key)
 
+    def __setitem__(self, key, value):
+        self._file.writestr(key, value.read())
+
     @property
     def is_open(self):
         return self._file is not None
 
     @property
     def is_writable(self):
-        return False
+        return self._mode in ('a', 'w')
