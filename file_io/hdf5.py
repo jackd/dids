@@ -197,6 +197,9 @@ class Hdf5ArrayDataset(Hdf5ChildDataset):
     def keys(self):
         return range(len(self._base))
 
+    def __contains__(self, key):
+        return 0 <= key < len(self._base)
+
     def __delitem__(self, key):
         raise NotImplementedError('Cannot delete item from array dataset')
 
