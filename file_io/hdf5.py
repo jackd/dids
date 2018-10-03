@@ -168,6 +168,12 @@ class NestedHdf5Dataset(NestedDataset):
             base = base.require_group(k)
         _save_item(base, key[-1], value)
 
+    def get_child(self, k0):
+        return Hdf5ChildDataset(self, k0)
+
+    def children_keys(self):
+        return self._base.keys()
+
 
 # class NestedHdf5Dataset(Hdf5Dataset):
 #     def __init__(self, depth, path, mode='r'):

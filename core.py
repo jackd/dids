@@ -177,8 +177,8 @@ class Dataset(object):
     def filter_keys(self, key_filter_fn):
         return KeyFilteredDataSubset(self, key_filter_fn)
 
-    def map(self, map_fn):
-        return MappedDataset(self, map_fn)
+    def map(self, map_fn, inverse_map_fn=None):
+        return MappedDataset(self, map_fn, inverse_map_fn)
 
     def map_keys(self, key_fn, inverse_fn=None):
         return KeyMappedDataset(self, key_fn, inverse_fn)
@@ -331,6 +331,12 @@ class DelegatingDataset(Dataset):
     def __delitem__(self, key):
         del self._base[key]
 
+    def __len__(self):
+        return len(self._base)
+
+    def __contain__(self, key):
+        return key in self._base
+
 
 class WrappedDictDataset(DelegatingDataset):
     """Similar to DelegatingDataset, though redirects more methods."""
@@ -466,9 +472,10 @@ class ZippedDataset(CompoundDataset):
 
 class MappedDataset(DelegatingDataset):
     """Dataset representing a mapping applied to a base dataset."""
-    def __init__(self, base_dataset, map_fn):
+    def __init__(self, base_dataset, map_fn, inverse_map_fn=None):
         super(MappedDataset, self).__init__(base_dataset)
         self._map_fn = map_fn
+        self._inverse_map_fn = inverse_map_fn
 
     def __contains__(self, key):
         return key in self._base
@@ -484,7 +491,10 @@ class MappedDataset(DelegatingDataset):
 
     @property
     def is_writable(self):
-        return False
+        return self._base.is_writable and self._inverse_map_fn is not None
+
+    def __setitem__(self, key, value):
+        self._base[key] = self._inverse_map_fn(value)
 
 
 class KeyFilteredDataSubset(DelegatingDataset):
@@ -520,6 +530,15 @@ class DataSubset(DelegatingDataset):
         super(DataSubset, self).__init__(base_dataset)
         if self.is_open:
             self._check_keys()
+
+    def __len__(self):
+        return len(self._keys)
+
+    def items(self):
+        return ((k, self[k]) for k in self.keys())
+
+    def values(self):
+        return (self[k] for k in self.keys())
 
     def _check_keys(self):
         if self._check_present:
@@ -765,3 +784,9 @@ class BiKeyDataset(Dataset):
     def __delitem__(self, key):
         k0, k1 = key
         del self._datasets[k0][k1]
+
+    def get_child(self, k0):
+        return self._datasets[k0]
+
+    def children_keys(self):
+        return self._datasets.keys()

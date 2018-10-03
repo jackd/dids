@@ -33,6 +33,7 @@ class ZipFileDataset(core.Dataset):
         return self._file.open(key)
 
     def __setitem__(self, key, value):
+        self._assert_writable('Cannot __setitem__ if dataset is not writable')
         self._file.writestr(key, value.read())
 
     @property

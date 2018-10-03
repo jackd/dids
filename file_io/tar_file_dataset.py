@@ -32,10 +32,14 @@ class TarFileDataset(core.Dataset):
     def __getitem__(self, key):
         return self._file.extractfile(self._file.getmember(key))
 
+    def __setitem__(self, key, value):
+        self._assert_writable('Cannot __setitem__ if dataset is not writable')
+        self._file.writestr(key, value.read())
+
     @property
     def is_open(self):
         return self._file is not None
 
     @property
     def is_writable(self):
-        return False
+        return self._mode in ('a', 'w')
