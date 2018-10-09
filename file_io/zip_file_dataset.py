@@ -26,7 +26,8 @@ class ZipFileDataset(core.Dataset):
     def keys(self):
         self._assert_open('Cannot get keys of closed dataset')
         if self._keys is None:
-            self._keys = frozenset(self._file.namelist())
+            self._keys = frozenset(
+                f for f in self._file.namelist() if f != './')
         return self._keys
 
     def __getitem__(self, key):

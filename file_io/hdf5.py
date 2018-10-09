@@ -6,9 +6,9 @@ import dids.auto_save as auto_save
 from dids.nest import NestedDataset
 
 
-def _save_item(group, key, value):
+def _save_item(group, key, value, compression=None):
     if isinstance(value, np.ndarray):
-        return group.create_dataset(key, data=value)
+        return group.create_dataset(key, data=value, compression=compression)
     elif key == 'attrs':
         if not hasattr(value, 'items'):
             raise ValueError('attrs value must have `items` attr')
@@ -32,14 +32,19 @@ def _save_item(group, key, value):
 
 
 class Hdf5Dataset(core.WrappedDictDataset):
-    def __init__(self, path, mode='r'):
+    def __init__(self, path, mode='r', compression=None):
         self._path = path
         self._mode = mode
         self._base = None
+        self._compression = compression
+
+    @property
+    def compression(self):
+        return self._compression
 
     def __setitem__(self, key, value):
         self._assert_writable('Cannot set item in unwritable dataset')
-        _save_item(self._base, key, value)
+        _save_item(self._base, key, value, compression=self.compression)
 
     def __delitem__(self, key):
         self._assert_writable('Cannot delete item in unwritable dataset')
@@ -156,8 +161,8 @@ class Hdf5ChildDataset(Hdf5Dataset):
 # NestedHdf5Dataset = nested_hdf5_dataset
 
 class NestedHdf5Dataset(NestedDataset):
-    def __init__(self, depth, path, mode='r'):
-        base = Hdf5Dataset(path, mode=mode)
+    def __init__(self, depth, path, mode='r', compression=None):
+        base = Hdf5Dataset(path, mode=mode, compression=compression)
         super(NestedHdf5Dataset, self).__init__(base, depth)
 
     def __setitem__(self, key, value):
@@ -166,7 +171,7 @@ class NestedHdf5Dataset(NestedDataset):
         base = self._base._base
         for k in key[:-1]:
             base = base.require_group(k)
-        _save_item(base, key[-1], value)
+        _save_item(base, key[-1], value, compression=self.compression)
 
     def get_child(self, k0):
         return Hdf5ChildDataset(self, k0)

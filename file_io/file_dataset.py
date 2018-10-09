@@ -46,6 +46,10 @@ class FileDataset(_PathDataset):
     def __getitem__(self, key):
         return open(self.path(key), self._mode)
 
+    def __setitem__(self, key, value):
+        with open(self.path(key), self._mode) as fp:
+            fp.write(value.read())
+
     def keys(self):
         n = len(self._root_dir) + 1
         for dirpath, dirnames, filenames in os.walk(self._root_dir):
