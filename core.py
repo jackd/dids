@@ -27,7 +27,95 @@ class LengthedGenerator(object):
         return self._len
 
 
-class Dataset(object):
+class Resource(object):
+    def _assert_open(self, message=None):
+        if not self.is_open:
+            raise errors.ClosedDatasetError(message)
+
+    def _assert_closed(self, message=None):
+        if self.is_open:
+            raise errors.OpenDatasetError(message)
+
+    def __enter__(self):
+        self.open()
+        return self
+
+    def __exit__(self, *args, **kwargs):
+        self.close()
+
+    def open_connection(self, client):
+        if not hasattr(self, '_clients'):
+            self._clients = set()
+        clients = self._clients
+        if len(clients) == 0:
+            self._open_resource()
+        clients.add(client)
+
+    def close_connection(self, client):
+        if not hasattr(self, '_clients'):
+            self._clients = set()
+        clients = self._clients
+        if client not in self._clients:
+            raise ValueError('Cannot close client connection: not open.')
+        clients.remove(client)
+        if len(clients) == 0:
+            self._close_resource()
+
+    def open(self):
+        self.open_connection(self)
+
+    def close(self):
+        self.close_connection(self)
+
+    def _open_resource(self):
+        pass
+
+    def _close_resource(self):
+        pass
+
+    @property
+    def is_open(self):
+        """Flag indicating whether this dataset is open for reading."""
+        return True
+
+
+class DependentResource(Resource):
+    def __init__(self, *dependencies):
+        if not all(isinstance(r, Resource) for r in dependencies):
+            raise ValueError('dependencies must all be of type Resource')
+        self._dependencies = dependencies
+        self._is_open = False
+
+    @property
+    def is_open(self):
+        return self._is_open
+
+    def _open_dependencies(self):
+        for dep in self._dependencies:
+            dep.open_connection(self)
+
+    def _close_dependencies(self):
+        for dep in self._dependencies:
+            dep.close_connection(self)
+
+    def _open_self(self):
+        self._assert_closed('Cannot open: already open')
+        self._is_open = True
+
+    def _close_self(self):
+        self._assert_open('Cannot close: already closed')
+        self._is_open = False
+
+    def _open_resource(self):
+        self._open_dependencies()
+        self._open_self()
+
+    def _close_resource(self):
+        self._close_self()
+        self._close_dependencies()
+
+
+class Dataset(Resource):
     """
     Abstract base class for dict-like interface with convenient wrapping fns.
 
@@ -50,11 +138,6 @@ class Dataset(object):
 
     def __init__(self):
         self._clients = set()
-
-    @property
-    def is_open(self):
-        """Flag indicating whether this dataset is open for reading."""
-        return True
 
     def keys(self):
         self._assert_open('Cannot get keys from closed dataset')
@@ -90,10 +173,6 @@ class Dataset(object):
         if not self.is_writable:
             raise errors.UnwritableDatasetError(message)
 
-    def _assert_open(self, message=None):
-        if not self.is_open:
-            raise errors.ClosedDatasetError(message)
-
     def __contains__(self, key):
         return key in self.keys()
 
@@ -108,43 +187,6 @@ class Dataset(object):
 
     def __len__(self):
         return len(self.keys())
-
-    def __enter__(self):
-        self.open()
-        return self
-
-    def __exit__(self, *args, **kwargs):
-        self.close()
-
-    def _open_resource(self):
-        pass
-
-    def _close_resource(self):
-        pass
-
-    def open_connection(self, client):
-        if not hasattr(self, '_clients'):
-            self._clients = set()
-        clients = self._clients
-        if len(clients) == 0:
-            self._open_resource()
-        clients.add(client)
-
-    def close_connection(self, client):
-        if not hasattr(self, '_clients'):
-            self._clients = set()
-        clients = self._clients
-        if client not in self._clients:
-            raise ValueError('Cannot close client connection: not open.')
-        clients.remove(client)
-        if len(clients) == 0:
-            self._close_resource()
-
-    def open(self):
-        self.open_connection(self)
-
-    def close(self):
-        self.close_connection(self)
 
     def get(self, key, default_value):
         try:

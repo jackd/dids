@@ -17,6 +17,11 @@ class ClosedDatasetError(IOError):
         super(ClosedDatasetError, self).__init__(message)
 
 
+class OpenDatasetError(IOError):
+    def __init__(self, message):
+        super(OpenDatasetError, self).__init__(message)
+
+
 class UnwritableDatasetError(IOError):
     def __init__(self, message):
         super(UnwritableDatasetError, self).__init__(message)

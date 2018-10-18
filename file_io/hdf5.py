@@ -31,35 +31,10 @@ def _save_item(group, key, value, compression=None):
             % str(value))
 
 
-class Hdf5Dataset(core.WrappedDictDataset):
-    def __init__(self, path, mode='r', compression=None):
+class Hdf5Resource(core.Resource):
+    def __init__(self, path, mode='r'):
         self._path = path
         self._mode = mode
-        self._base = None
-        self._compression = compression
-
-    @property
-    def compression(self):
-        return self._compression
-
-    def __setitem__(self, key, value):
-        self._assert_writable('Cannot set item in unwritable dataset')
-        _save_item(self._base, key, value, compression=self.compression)
-
-    def __delitem__(self, key):
-        self._assert_writable('Cannot delete item in unwritable dataset')
-        del self._base[key]
-
-    @property
-    def path(self):
-        return self._path
-
-    @property
-    def is_open(self):
-        return self._base is not None
-
-    def is_writable(self):
-        return self._mode in ('a', 'w') and self.is_open
 
     def _open_resource(self):
         if self.is_open:
@@ -77,6 +52,57 @@ class Hdf5Dataset(core.WrappedDictDataset):
         if self.is_open:
             self._base.close()
             self._base = None
+
+    @property
+    def is_open(self):
+        return self._base is not None
+
+
+class Hdf5ChildResource(core.Resource):
+    def __init__(self, parent, subpath):
+        self._parent = parent
+        self._is_open = False
+
+    def _open_resource(self):
+        if self.is_open():
+            raise RuntimeError('Cannot open resource: already open.')
+        self._parent.open_connection(self)
+        self._is_open = True
+
+    def _close_resourece(self):
+        if not self.is_open():
+            raise RuntimeError('Cannot close resource: not open.')
+        self._parent.close_resource(self)
+        self._is_open = False
+
+    def is_open(self):
+        return self._is_open
+
+
+class Hdf5Dataset(Hdf5Resource, core.WrappedDictDataset):
+    def __init__(self, path, mode='r', compression=None):
+        self._base = None
+        self._compression = compression
+        Hdf5Resource.__init__(self, path, mode)
+
+    @property
+    def compression(self):
+        return self._compression
+
+    def __setitem__(self, key, value):
+        self._assert_writable('Cannot set item in unwritable dataset')
+        _save_item(self._base, key, value, compression=self.compression)
+
+    def __delitem__(self, key):
+        self._assert_writable('Cannot delete item in unwritable dataset')
+        del self._base[key]
+
+    @property
+    def path(self):
+        return self._path
+
+    def is_writable(self):
+        return self._mode in ('a', 'w') and self.is_open
 
 
 class Hdf5ChildDataset(Hdf5Dataset):
